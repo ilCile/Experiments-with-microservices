@@ -29,16 +29,15 @@ function handleCallback() {
   }
 }
 
-async function callApi(endpoint) {
+async function callApi(endpoint, port) {
   const token = localStorage.getItem("token");
-
   if (!token) {
     setOutput("Non sei autenticato");
     return;
   }
 
   try {
-    const res = await fetch(`${CONFIG.API_BASE}${endpoint}`, {
+    const res = await fetch(`http://localhost:${port}/api${endpoint}`, {
       headers: {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json"
@@ -56,12 +55,12 @@ async function callApi(endpoint) {
 
 
 function getUser() {
-  callApi("/user");
+  callApi("/user", CONFIG.USER_SERVICE_PORT);
 }
 
 
 function getAdmin() {
-  callApi("/admin");
+  callApi("/admin", CONFIG.ADMIN_SERVICE_PORT);
 }
 
 function setOutput(text) {

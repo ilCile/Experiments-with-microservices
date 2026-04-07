@@ -37,6 +37,7 @@ def verify_token(token):
             token,
             signing_key,
             algorithms=["RS256"],
+            audience="account",
             options={"verify_iss": False} #the token issuer is localhost:8080 but the backend sees it as keycloak:8080
         )
         return decoded
@@ -50,8 +51,6 @@ def verify_token(token):
     except Exception as e:
         print(f"Error: {e}", flush=True)
         return None
-
-
 
 def login_required(f):
     @wraps(f)
@@ -76,7 +75,6 @@ def login_required(f):
 
     return decorated
 
-
 def role_required(role):
     def decorator(f):
         @wraps(f)
@@ -89,16 +87,6 @@ def role_required(role):
         return decorated
     return decorator
 
-@app.route("/api/user")
-@login_required
-def user():
-    return jsonify({
-        "message": "utente autenticato",
-        "username": request.user.get("preferred_username"),
-        "email": request.user.get("email"),
-        "roles": request.user.get("realm_access", {}).get("roles", [])
-    })
-
 @app.route("/api/admin")
 @login_required
 @role_required("admin")
@@ -109,4 +97,4 @@ def admin():
     })
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(app.run(host="0.0.0.0", port=5002))
