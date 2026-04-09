@@ -1,6 +1,8 @@
 volumes:
   postgres_data:
-      driver: local
+    driver: local
+  appDB:
+    driver: local
 
 services:
   postgres:
@@ -37,6 +39,7 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: Simple-web-App
       KEYCLOAK_CLIENT_ID: Simple-web-app-Keycloak
+      DB_URL: postgresql://appUser:appPw@application-DB:5432/appDB
   admin-service:
     build:
       context: ./admin-service
@@ -55,6 +58,14 @@ services:
       dockerfile: Dockerfile
     ports:
       - 3000:3000
+  application-DB:
+      image: postgres:15
+      volumes:
+        - appDB:/var/lib/postgresql/data
+      environment:
+        POSTGRES_DB: appDB
+        POSTGRES_USER: appUser
+        POSTGRES_PASSWORD: appPw
 
 
        

@@ -5,8 +5,20 @@ import jwt
 from flask_cors import CORS
 import os
 from jwt import PyJWKClient
+from models import db, Post
 
 app = Flask(__name__)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DB_URL")
+
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+
+#post = Post(title="Primo Post", content="Testo del post", author_id="1234-uuid")
+#db.session.add(post)
+#db.session.commit()
 
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, allow_headers=["Content-Type", "Authorization"])
 

@@ -37,7 +37,6 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: Simple-web-App
       KEYCLOAK_CLIENT_ID: Simple-web-app-Keycloak
-    restart: on-failure
   frontend:
     build:
       context: ./frontend

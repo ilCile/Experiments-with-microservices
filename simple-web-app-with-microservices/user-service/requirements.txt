@@ -2,3 +2,5 @@ flask
 flask-cors
 requests
 pyjwt[cryptography]
+flask-SQLAlchemy
+psycopg2-binary
