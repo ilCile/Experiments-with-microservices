@@ -16,10 +16,6 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-#post = Post(title="Primo Post", content="Testo del post", author_id="1234-uuid")
-#db.session.add(post)
-#db.session.commit()
-
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, allow_headers=["Content-Type", "Authorization"])
 
 KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL")
@@ -87,15 +83,52 @@ def login_required(f):
 
     return decorated
 
-@app.route("/api/user")
+@app.route("/api/getPosts")
 @login_required
-def user():
-    return jsonify({
-        "message": "utente autenticato",
-        "username": request.user.get("preferred_username"),
-        "email": request.user.get("email"),
-        "roles": request.user.get("realm_access", {}).get("roles", [])
-    })
+def getPosts():
+    posts = Post.query.filter_by(author_id=request.user.get("sub")).all()
+    print(len(posts), flush=True)
+    return jsonify([
+        {
+            "id": post.id,
+            "title": post.title,
+            "content": post.content,
+            "author_id": post.author_id
+        }
+        for post in posts
+    ])
+
+@app.route("/api/createPost", methods=["POST"])
+@login_required
+def createPost():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+    title = data.get("title")
+    content = data.get("content")
+    if not title or not content:
+        return jsonify({"error": "Title and content are required"}), 400
+    author_id = request.user.get("sub")
+    try:
+        post = Post(
+            title=title,
+            content=content,
+            author_id=author_id,
+        )
+        db.session.add(post)
+        db.session.commit()
+        return jsonify({
+            "message": "Post created successfully",
+            "post": {
+                "title": post.title,
+                "content": post.content,
+                "author_id": post.author_id
+            }
+        }), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(app.run(host="0.0.0.0", port=5001))

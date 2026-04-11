@@ -46,21 +46,16 @@ async function callApi(endpoint, port) {
 
     const data = await res.json();
 
-    setOutput(JSON.stringify(data, null, 2));
+    return data;
 
   } catch (err) {
-    setOutput("Errore chiamata API");
+    return "API error";
   }
 }
 
-
-function getUser() {
-  callApi("/user", CONFIG.USER_SERVICE_PORT);
-}
-
-
-function getAdmin() {
-  callApi("/admin", CONFIG.ADMIN_SERVICE_PORT);
+async function getAdmin() {
+  const data = await callApi("/admin", CONFIG.ADMIN_SERVICE_PORT);
+  setOutput(JSON.stringify(data, null, 2));
 }
 
 function setOutput(text) {
@@ -81,8 +76,42 @@ function updateStatus() {
 
 document.getElementById("loginBtn").addEventListener("click", login);
 document.getElementById("logoutBtn").addEventListener("click", logout);
-document.getElementById("userBtn").addEventListener("click", getUser);
+document.getElementById("getPosts").addEventListener("click", () => {
+  window.location.href = "./posts.html";
+});
 document.getElementById("adminBtn").addEventListener("click", getAdmin);
+
+document.getElementById("postForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setOutput("Non sei autenticato");
+      return;
+    }
+
+    try {
+      const data = {
+        title: document.querySelector("[name=title]").value,
+        content: document.querySelector("[name=content]").value
+      };
+
+      const res = await fetch("http://localhost:5001/api/createPost", {
+          method: "POST",
+          headers: {
+              "Authorization": "Bearer " + token,
+              "Content-Type": "application/json"
+          },
+          body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+      setOutput(JSON.stringify(result, null, 2));
+    }
+    catch(err) {
+      setOutput("API error");
+    }
+});
 
 handleCallback();
 updateStatus();

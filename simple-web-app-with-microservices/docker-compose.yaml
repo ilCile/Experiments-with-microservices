@@ -34,7 +34,7 @@ services:
     ports:
       - 5001:5001
     depends_on:
-      - keycloak
+      - application-DB
     environment:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: Simple-web-App

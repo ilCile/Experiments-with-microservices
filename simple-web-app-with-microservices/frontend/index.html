@@ -25,8 +25,22 @@
   </div>
 
   <div class="card">
+    <h2>Crea post</h2>
+    <form id="postForm" action="#" method="POST">
+      
+      <label>Titolo</label>
+      <input type="text" name="title" required>
+
+      <label>Contenuto</label>
+      <textarea name="content" rows="5" required></textarea>
+
+      <button type="submit">Pubblica</button>
+    </form>
+  </div>
+
+  <div class="card">
     <h2>Area Utente</h2>
-    <button id="userBtn">Carica dati utente</button>
+    <button id="getPosts">Visualizza i tuoi post</button>
   </div>
 
   <div class="card">
