@@ -8,7 +8,11 @@ from jwt import PyJWKClient
 
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, allow_headers=["Content-Type", "Authorization"])
+CORS(app, 
+  resources={r"/*": {"origins": "https://api.local"}}, 
+  allow_headers=["Content-Type", "Authorization"],
+  supports_credentials=True
+)
 
 KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM")
@@ -87,7 +91,7 @@ def role_required(role):
         return decorated
     return decorator
 
-@app.route("/api/admin")
+@app.route("/admin")
 @login_required
 @role_required("admin")
 def admin():

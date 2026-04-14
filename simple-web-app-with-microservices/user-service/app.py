@@ -16,7 +16,11 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, allow_headers=["Content-Type", "Authorization"])
+CORS(app, 
+  resources={r"/*": {"origins": "https://api.local"}}, 
+  allow_headers=["Content-Type", "Authorization"],
+  supports_credentials=True
+)
 
 KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM")
@@ -83,7 +87,7 @@ def login_required(f):
 
     return decorated
 
-@app.route("/api/getPosts")
+@app.route("/getPosts")
 @login_required
 def getPosts():
     posts = Post.query.filter_by(author_id=request.user.get("sub")).all()
@@ -98,7 +102,7 @@ def getPosts():
         for post in posts
     ])
 
-@app.route("/api/createPost", methods=["POST"])
+@app.route("/createPost", methods=["POST"])
 @login_required
 def createPost():
     data = request.get_json()

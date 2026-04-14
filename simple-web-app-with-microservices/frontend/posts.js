@@ -2,21 +2,10 @@ async function loadPosts() {
 
     const container = document.getElementById("postsContainer");
     container.innerHTML = "";
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-        window.location.href = `${CONFIG.KEYCLOAK_URL}` +
-            `?client_id=${CONFIG.CLIENT_ID}` +
-            `&response_type=token` +
-            `&redirect_uri=${CONFIG.REDIRECT_URI}`;
-        return;
-    }
 
     try {
-        const res = await fetch("http://localhost:5001/api/getPosts", {
-            headers: {
-                "Authorization": "Bearer " + token
-            }
+        const res = await fetch("https://api.local/user/getPosts", {
+            credentials: 'include'
         });
 
         if (res.status == 401) {

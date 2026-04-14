@@ -1,20 +1,93 @@
 volumes:
   postgres_data:
-    driver: local
   appDB:
-    driver: local
+
+networks:
+  app-net:
+    driver: bridge
 
 services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=app-net"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.directory=/certs"
+      - "--providers.file.watch=true"
+      - "--providers.docker.endpoint=tcp://host.docker.internal:2375" #just for test
+      - "--log.level=DEBUG"
+    ports:
+      - "80:80"
+      - "8080:8080"
+      - "443:443"
+    volumes:
+      #- /var/run/docker.sock:/var/run/docker.sock
+      - ./certs:/certs
+    networks:
+      - app-net
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    networks:
+      - app-net
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "https://auth.local/realms/Simple-web-App"
+      OAUTH2_PROXY_LOGIN_URL: "https://auth.local/realms/Simple-web-App/protocol/openid-connect/auth"
+      OAUTH2_PROXY_REDEEM_URL: "http://keycloak:8080/realms/Simple-web-App/protocol/openid-connect/token"
+      OAUTH2_PROXY_OIDC_JWKS_URL: "http://keycloak:8080/realms/Simple-web-App/protocol/openid-connect/certs"
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
+      OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "Simple-web-app-Keycloak"
+      OAUTH2_PROXY_CLIENT_ID: Simple-web-app-Keycloak
+      OAUTH2_PROXY_CLIENT_SECRET: iJYXeLpUiKtpv5jOgRXVGrqtnZV4EwP3
+      OAUTH2_PROXY_COOKIE_SECRET: "12345678901234567890123456789012"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "static://200"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: ""
+      OAUTH2_PROXY_COOKIE_DOMAINS: ".local"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ".local"
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: "S256"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.oauth.rule=Host(`auth.local`) && PathPrefix(`/oauth2`)"
+      - "traefik.http.routers.oauth.entrypoints=websecure"
+      - "traefik.http.routers.oauth.tls=true"
+      - "traefik.http.services.oauth.loadbalancer.server.port=4180"
+
   postgres:
-      image: postgres:15
-      volumes:
-        - postgres_data:/var/lib/postgresql/data
-      environment:
-        POSTGRES_DB: keycloak
-        POSTGRES_USER: keycloak
-        POSTGRES_PASSWORD: password
+    image: postgres:15
+    networks:
+      - app-net
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: password
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.5
+    command: start-dev
+    networks:
+      - app-net
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
@@ -22,50 +95,84 @@ services:
       KC_DB_PASSWORD: password
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: Pa55w0rd
-    command: start-dev
-    ports:
-      - 8080:8080
-    depends_on:
-      - postgres
+      KC_HOSTNAME_URL: "https://auth.local"
+      KC_HOSTNAME_ADMIN_URL: "https://auth.local"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_BACKCHANNEL_URL: http://keycloak:8080
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`auth.local`) && (PathPrefix(`/realms`) || PathPrefix(`/admin`) || PathPrefix(`/resources`))"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+
+  application-DB:
+    image: postgres:15
+    networks:
+      - app-net
+    volumes:
+      - appDB:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: appDB
+      POSTGRES_USER: appUser
+      POSTGRES_PASSWORD: appPw
+
   user-service:
-    build:
-      context: ./user-service
-      dockerfile: Dockerfile
-    ports:
-      - 5001:5001
+    build: ./user-service
+    networks:
+      - app-net
     depends_on:
       - application-DB
     environment:
       KEYCLOAK_BASE_URL: http://keycloak:8080
+      DB_URL: postgresql://appUser:appPw@application-DB:5432/appDB
       KEYCLOAK_REALM: Simple-web-App
       KEYCLOAK_CLIENT_ID: Simple-web-app-Keycloak
-      DB_URL: postgresql://appUser:appPw@application-DB:5432/appDB
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user.rule=Host(`api.local`) && PathPrefix(`/users`)"
+      - "traefik.http.routers.user.middlewares=auth@file"
+      - "traefik.http.services.user.loadbalancer.server.port=5001"
+      - "traefik.http.routers.user.entrypoints=websecure"
+      - "traefik.http.routers.user.tls=true"
+
   admin-service:
-    build:
-      context: ./admin-service
-      dockerfile: Dockerfile
-    ports:
-      - 5002:5002
+    build: ./admin-service
+    networks:
+      - app-net
     depends_on:
       - keycloak
+
     environment:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: Simple-web-App
       KEYCLOAK_CLIENT_ID: Simple-web-app-Keycloak
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.rule=Host(`api.local`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.admin.middlewares=auth@file"
+      - "traefik.http.services.admin.loadbalancer.server.port=5002"
+      - "traefik.http.routers.admin.entrypoints=websecure"
+      - "traefik.http.routers.admin.tls=true"
+
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - 3000:3000
-  application-DB:
-      image: postgres:15
-      volumes:
-        - appDB:/var/lib/postgresql/data
-      environment:
-        POSTGRES_DB: appDB
-        POSTGRES_USER: appUser
-        POSTGRES_PASSWORD: appPw
+    build: ./frontend
+    networks:
+      - app-net
 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`app.local`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
 
-       
+      # posts protetto
+      - "traefik.http.routers.posts.rule=Host(`app.local`) && Path(`/posts.html`)"
+      - "traefik.http.routers.posts.middlewares=auth@file"
+      - "traefik.http.routers.posts.service=frontend"
+      - "traefik.http.routers.posts.entrypoints=websecure"
+      - "traefik.http.routers.posts.tls=true"
